@@ -42,7 +42,7 @@
 //         Name   string
 //         IsCute bool
 //     }
-// 
+//
 //     func main() {
 //         gob.Register(&Cat{})
 //         conn, _ := net.Dial("tcp", "host.com:8080")
@@ -56,6 +56,7 @@ package chanio
 import (
 	"encoding/gob"
 	"io"
+	"log"
 )
 
 // packet is a wrapper for data passed over the io interfaces.
@@ -75,7 +76,7 @@ type packet struct {
 //     }
 //
 func NewReader(r io.Reader) <-chan interface{} {
-	ch := make(chan interface{})
+	ch := make(chan interface{}, 1)
 	go read(r, ch)
 	return ch
 }
@@ -90,6 +91,7 @@ func read(r io.Reader, ch chan interface{}) {
 		if err := dec.Decode(&e); err == io.EOF {
 			break
 		} else if err != nil {
+			log.Println(err)
 			continue
 		}
 		ch <- e.X
@@ -106,22 +108,23 @@ func read(r io.Reader, ch chan interface{}) {
 //     w <- "foo"
 //
 func NewWriter(w io.Writer) chan<- interface{} {
-	ch := make(chan interface{})
+	ch := make(chan interface{}, 1)
 	go write(w, ch)
 	return ch
 }
 
 // write handles all the data received from specified channel
-// and writes it to the io.Writer. 
+// and writes it to the io.Writer.
 func write(w io.Writer, ch chan interface{}) {
-    enc := gob.NewEncoder(w)
-    for x := range ch {
-        if err := enc.Encode(&packet{x}); err == io.EOF {
-            break
+	enc := gob.NewEncoder(w)
+	for x := range ch {
+		if err := enc.Encode(&packet{x}); err == io.EOF {
+			break
 		} else if err != nil {
-            continue
-        }
-    }
+			log.Println(err)
+			continue
+		}
+	}
 	if wc, ok := w.(io.WriteCloser); ok {
 		wc.Close()
 	}

@@ -124,13 +124,13 @@ func TestExchangingMaps(t *testing.T) {
 }
 
 func TestExchangingStructs(t *testing.T) {
-	gob.Register(new(struct{A int}))
+	gob.Register(new(struct{ A int }))
 	buf := bytes.NewBuffer([]byte{})
 	w := NewWriter(buf)
-	w <- &struct{A int}{1}
+	w <- &struct{ A int }{1}
 	r := NewReader(buf)
 	x := <-r
-	s, ok := x.(*struct{A int})
+	s, ok := x.(*struct{ A int })
 	if !ok {
 		t.Errorf("Expected to pass a struct, given %s", x)
 		return
