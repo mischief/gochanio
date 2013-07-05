@@ -77,7 +77,15 @@ type packet struct {
 //
 func NewReader(r io.Reader) <-chan interface{} {
 	ch := make(chan interface{}, 1)
-	go read(r, ch)
+	go func() {
+		defer func() {
+			if e := recover(); e != nil {
+				log.Printf("gochanio: read: %s", e)
+				close(ch)
+			}
+		}()
+		read(r, ch)
+	}()
 	return ch
 }
 
@@ -91,7 +99,7 @@ func read(r io.Reader, ch chan interface{}) {
 		if err := dec.Decode(&e); err == io.EOF {
 			break
 		} else if err != nil {
-			log.Println(err)
+			panic(err)
 			continue
 		}
 		ch <- e.X
@@ -109,7 +117,15 @@ func read(r io.Reader, ch chan interface{}) {
 //
 func NewWriter(w io.Writer) chan<- interface{} {
 	ch := make(chan interface{}, 1)
-	go write(w, ch)
+	go func() {
+		defer func() {
+			if e := recover(); e != nil {
+				log.Printf("gochanio: write: %s", e)
+				close(ch)
+			}
+		}()
+		write(w, ch)
+	}()
 	return ch
 }
 
@@ -121,7 +137,7 @@ func write(w io.Writer, ch chan interface{}) {
 		if err := enc.Encode(&packet{x}); err == io.EOF {
 			break
 		} else if err != nil {
-			log.Println(err)
+			panic(err)
 			continue
 		}
 	}
