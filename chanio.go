@@ -56,7 +56,6 @@ package chanio
 import (
 	"encoding/gob"
 	"io"
-	"log"
 )
 
 // packet is a wrapper for data passed over the io interfaces.
@@ -75,34 +74,31 @@ type packet struct {
 //         // do something with x
 //     }
 //
-func NewReader(r io.Reader) <-chan interface{} {
-	ch := make(chan interface{}, 1)
-	go func() {
-		defer func() {
-			if e := recover(); e != nil {
-				log.Printf("gochanio: read: %s", e)
-				close(ch)
-			}
-		}()
-		read(r, ch)
-	}()
-	return ch
+func NewReader(r io.Reader) (<-chan interface{}, <-chan error) {
+	rch := make(chan interface{}, 1)
+	ech := make(chan error, 1)
+
+	go read(r, rch, ech)
+
+	return rch, ech
 }
 
 // read handles all the data read from the underlaying io.Reader
 // and passes it to the specified channel.
-func read(r io.Reader, ch chan interface{}) {
-	defer close(ch)
+func read(r io.Reader, rch chan interface{}, ech chan error) {
+	defer close(rch)
+	defer close(ech)
 	dec := gob.NewDecoder(r)
 	for {
 		var e packet
 		if err := dec.Decode(&e); err == io.EOF {
+			ech <- err
 			break
 		} else if err != nil {
-			panic(err)
+			ech <- err
 			continue
 		}
-		ch <- e.X
+		rch <- e.X
 	}
 }
 
@@ -115,29 +111,26 @@ func read(r io.Reader, ch chan interface{}) {
 //     w := chanio.NewWriter(conn)
 //     w <- "foo"
 //
-func NewWriter(w io.Writer) chan<- interface{} {
-	ch := make(chan interface{}, 1)
-	go func() {
-		defer func() {
-			if e := recover(); e != nil {
-				log.Printf("gochanio: write: %s", e)
-				close(ch)
-			}
-		}()
-		write(w, ch)
-	}()
-	return ch
+func NewWriter(w io.Writer) (chan<- interface{}, <-chan error) {
+	wch := make(chan interface{}, 1)
+	ech := make(chan error, 1)
+
+	go write(w, wch, ech)
+
+	return wch, ech
 }
 
 // write handles all the data received from specified channel
 // and writes it to the io.Writer.
-func write(w io.Writer, ch chan interface{}) {
+func write(w io.Writer, wch chan interface{}, ech chan error) {
+	defer close(ech)
 	enc := gob.NewEncoder(w)
-	for x := range ch {
+	for x := range wch {
 		if err := enc.Encode(&packet{x}); err == io.EOF {
+			ech <- err
 			break
 		} else if err != nil {
-			panic(err)
+			ech <- err
 			continue
 		}
 	}

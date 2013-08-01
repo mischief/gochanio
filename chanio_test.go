@@ -12,7 +12,7 @@ func TestReader(t *testing.T) {
 	buf := bytes.NewBuffer([]byte{})
 	enc := gob.NewEncoder(buf)
 	enc.Encode(packet{1})
-	r := NewReader(buf)
+	r, _ := NewReader(buf)
 	x := <-r
 	val, ok := x.(int)
 	if !ok || val != 1 {
@@ -22,18 +22,32 @@ func TestReader(t *testing.T) {
 
 func TestWriter(t *testing.T) {
 	buf := bytes.NewBuffer([]byte{})
-	w := NewWriter(buf)
-	w <- 1
-	dec := gob.NewDecoder(buf)
 	var p packet
+
+	w, ech := NewWriter(buf)
+
+	w <- 1
+
+	dec := gob.NewDecoder(buf)
+
 	err := dec.Decode(&p)
+
 	if err != nil {
 		t.Errorf("Expected to decode a packet, error: %v", err)
 	}
+
 	val, ok := p.X.(int)
+
 	if !ok || val != 1 {
 		t.Errorf("Expected decoded value to be 1, given %s", val)
 	}
+
+	select {
+	case e := <-ech:
+		t.Errorf("Writer error: %s", e)
+	default:
+	}
+
 	close(w)
 }
 
@@ -50,11 +64,11 @@ func TestReaderAndWriterOverTheNetwork(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected to accept connection, error: %v", err)
 		}
-		r = NewReader(conn)
+		r, _ = NewReader(conn)
 		wg.Done()
 	}()
 	conn, _ := net.Dial("tcp", host)
-	w = NewWriter(conn)
+	w, _ = NewWriter(conn)
 	wg.Wait()
 	w <- 1
 	x := <-r
@@ -71,11 +85,11 @@ func TestReaderAndWriterOverTheNetwork(t *testing.T) {
 
 func TestExchangingBasicTypes(t *testing.T) {
 	buf := bytes.NewBuffer([]byte{})
-	w := NewWriter(buf)
+	w, _ := NewWriter(buf)
 	w <- 1
 	w <- "foo"
 	w <- float32(1.23)
-	r := NewReader(buf)
+	r, _ := NewReader(buf)
 	i := <-r
 	if val, ok := i.(int); !ok || val != 1 {
 		t.Errorf("Expected to pass an int value, given %s", i)
@@ -92,9 +106,9 @@ func TestExchangingBasicTypes(t *testing.T) {
 
 func TestExchangingSlices(t *testing.T) {
 	buf := bytes.NewBuffer([]byte{})
-	w := NewWriter(buf)
+	w, _ := NewWriter(buf)
 	w <- []string{"foo", "bar"}
-	r := NewReader(buf)
+	r, _ := NewReader(buf)
 	x := <-r
 	l, ok := x.([]string)
 	if !ok {
@@ -109,9 +123,9 @@ func TestExchangingSlices(t *testing.T) {
 func TestExchangingMaps(t *testing.T) {
 	gob.Register(map[string]int{})
 	buf := bytes.NewBuffer([]byte{})
-	w := NewWriter(buf)
+	w, _ := NewWriter(buf)
 	w <- map[string]int{"foo": 1}
-	r := NewReader(buf)
+	r, _ := NewReader(buf)
 	x := <-r
 	m, ok := x.(map[string]int)
 	if !ok {
@@ -126,9 +140,9 @@ func TestExchangingMaps(t *testing.T) {
 func TestExchangingStructs(t *testing.T) {
 	gob.Register(new(struct{ A int }))
 	buf := bytes.NewBuffer([]byte{})
-	w := NewWriter(buf)
+	w, _ := NewWriter(buf)
 	w <- &struct{ A int }{1}
-	r := NewReader(buf)
+	r, _ := NewReader(buf)
 	x := <-r
 	s, ok := x.(*struct{ A int })
 	if !ok {
